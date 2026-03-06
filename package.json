@@ -1,0 +1,31 @@
+{
+  "name": "stremio-animesub",
+  "version": "1.0.0",
+  "description": "Stremio addon for Polish anime subtitles from animesub.info",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "stremio",
+    "addon",
+    "subtitles",
+    "anime",
+    "polish",
+    "animesub"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "ass-to-srt": "^1.2.1",
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "iconv-lite": "^0.7.0",
+    "stremio-addon-sdk": "^1.6.10"
+  }
+}
