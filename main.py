@@ -46,10 +46,10 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
-    "logo": "./ASlogo.jpg",
+    "logo": f"{BASE_URL}/ASlogo.jpg",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "kitsu"],
@@ -63,6 +63,9 @@ MANIFEST = {
 async def manifest():
     return JSONResponse(content=MANIFEST)
 
+@app.get("/ASlogo.jpg")
+async def logo():
+    return FileResponse("ASlogo.jpg", media_type="image/jpeg")
 
 # ══════════════════════════════════════════════════════════════
 #  METADATA: IMDB/Kitsu → tytuł anime
@@ -307,15 +310,91 @@ def generate_search_strategies(title: str, season: Optional[int], episode: Optio
     return strategies
 
 
-def match_subtitles(subs: list[dict], target_season: Optional[int], target_episode: Optional[int]) -> list[dict]:
-    """Filtruje napisy po sezonie/odcinku."""
+def _normalize_title(title: str) -> str:
+    """Normalizuje tytuł do porównywania: lowercase, bez interpunkcji, bez zbędnych spacji."""
+    t = title.lower()
+    t = re.sub(r"[:\-–—.,!?'\"()\[\]{}]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _title_matches(sub_titles: list[str], target_title: str) -> bool:
+    """
+    Sprawdza czy napisy pasują do szukanego anime.
+    Odrzuca: inne serie (Boruto vs Naruto), openingi, endingi, filmy, OVA, SD spin-offy.
+    """
+    target_norm = _normalize_title(target_title)
+    target_words = set(target_norm.split())
+
+    # Słowa kluczowe które oznaczają INNĄ serię lub nie-odcinek
+    non_episode_markers = {"opening", "ending", "op", "ed", "ost", "soundtrack", "amv", "trailer", "pv"}
+
+    for raw_title in sub_titles:
+        if not raw_title:
+            continue
+
+        sub_norm = _normalize_title(raw_title)
+
+        # 1. Odrzuć openingi, endingi, AMV itp.
+        sub_words = set(sub_norm.split())
+        if sub_words & non_episode_markers:
+            log.debug(f"[Filter] Odrzucam (opening/ending): {raw_title}")
+            return False
+
+        # 2. Sprawdź czy tytuł zaczyna się od szukanego tytułu
+        #    "naruto" pasuje do "naruto tv ep08"
+        #    "naruto" NIE pasuje do "boruto naruto next generations ep08"
+        #    "naruto" NIE pasuje do "naruto shippuuden tv ep08" (inna seria)
+        if sub_norm.startswith(target_norm):
+            # Co jest ZA tytułem? Sprawdź czy to nie inna seria
+            remainder = sub_norm[len(target_norm):].strip()
+            # Te słowa zaraz po tytule oznaczają inną serię
+            different_series = {"shippuuden", "shippuden", "shipuden", "sd", "boruto",
+                                "next generations", "rock lee"}
+            if any(remainder.startswith(ds) for ds in different_series):
+                log.debug(f"[Filter] Odrzucam (inna seria): {raw_title}")
+                return False
+            return True
+
+        # 3. Jeśli nie zaczyna się od tytułu, sprawdź czy target jest całym prefiksem
+        #    jakiegoś słowa (np. "one piece" w "one piece tv ep01")
+        if target_norm in sub_norm:
+            # Upewnij się, że target nie jest tylko częścią dłuższego słowa
+            idx = sub_norm.index(target_norm)
+            # Musi zaczynać się na początku lub po spacji
+            if idx == 0 or sub_norm[idx - 1] == " ":
+                after = sub_norm[idx + len(target_norm):]
+                if not after or after[0] == " ":
+                    # Sprawdź czy przed tytułem nie ma słów które zmieniają serię
+                    before = sub_norm[:idx].strip()
+                    if before and before.split()[-1] in {"boruto", "sd"}:
+                        return False
+                    return True
+
+    return False
+
+
+def match_subtitles(
+    subs: list[dict], target_title: str,
+    target_season: Optional[int], target_episode: Optional[int]
+) -> list[dict]:
+    """Filtruje napisy po tytule, sezonie i odcinku."""
     matched = []
     for s in subs:
+        # Filtr tytułu — najważniejszy
+        sub_titles = [s.get("title_org", ""), s.get("title_eng", ""), s.get("title_alt", "")]
+        if not _title_matches(sub_titles, target_title):
+            continue
+
+        # Filtr odcinka
         if target_episode is not None and s["episode"] is not None and s["episode"] != target_episode:
             continue
+
+        # Filtr sezonu
         if target_season is not None and s["season"] is not None:
             if target_season != 1 and s["season"] != target_season:
                 continue
+
         matched.append(s)
     return matched
 
@@ -517,6 +596,11 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
 #  GŁÓWNY ENDPOINT NAPISÓW DLA STREMIO
 # ══════════════════════════════════════════════════════════════
 
+@app.get("/subtitles/{content_type}/{content_id}/{extra}.json")
+async def subtitles_handler_extra(content_type: str, content_id: str, extra: str = ""):
+    return await subtitles_handler(content_type, content_id)
+
+
 @app.get("/subtitles/{content_type}/{content_id}.json")
 async def subtitles_handler(content_type: str, content_id: str):
     """Endpoint wywoływany przez Stremio."""
@@ -536,7 +620,7 @@ async def subtitles_handler(content_type: str, content_id: str):
         for strat in strategies:
             log.info(f'[Strategia] "{strat["query"]}" ({strat["type"]})')
             results = await search_subtitles(strat["query"], strat["type"])
-            matched = match_subtitles(results, meta["season"], meta["episode"])
+            matched = match_subtitles(results, meta["title"], meta["season"], meta["episode"])
 
             for sub in matched:
                 if sub["id"] not in seen:
