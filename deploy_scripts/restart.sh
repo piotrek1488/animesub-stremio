@@ -33,9 +33,9 @@ sleep 2
 if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
     echo ""
     echo "  ✓ $SERVICE_NAME działa"
-    echo "  Logi: sudo journalctl status $SERVICE_NAME --no-pager -n 0"
     echo "  Logi: sudo journalctl -u $SERVICE_NAME -f"
-    echo "  Logi: sudo journalctl -u $SERVICE_NAME --no-pager -n 20"
+    sudo systemctl status $SERVICE_NAME --no-pager -n 0
+    sudo journalctl -u $SERVICE_NAME --no-pager -n 20
 else
     echo ""
     echo "  ✗ Usługa nie działa! Sprawdź logi:"

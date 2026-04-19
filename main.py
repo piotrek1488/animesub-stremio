@@ -321,51 +321,43 @@ def _normalize_title(title: str) -> str:
 def _title_matches(sub_titles: list[str], target_title: str) -> bool:
     """
     Sprawdza czy napisy pasują do szukanego anime.
-    Odrzuca: inne serie (Boruto vs Naruto), openingi, endingi, filmy, OVA, SD spin-offy.
+    Odrzuca: inne serie, openingi, endingi, filmy, OVA, spin-offy.
     """
     target_norm = _normalize_title(target_title)
-    target_words = set(target_norm.split())
 
-    # Słowa kluczowe które oznaczają INNĄ serię lub nie-odcinek
-    non_episode_markers = {"opening", "ending", "op", "ed", "ost", "soundtrack", "amv", "trailer", "pv", "movie", "film", "ova", "special"}
+    non_episode_markers = {"opening", "ending", "op", "ed", "ost", "soundtrack",
+                           "amv", "trailer", "pv", "movie", "film", "ova", "special"}
+    different_series = {"shippuuden", "shippuden", "shipuden", "sd", "boruto",
+                        "next generations", "rock lee"}
 
+    # Faza 1: sprawdź WSZYSTKIE tytuły pod kątem markerów
     for raw_title in sub_titles:
         if not raw_title:
             continue
-
         sub_norm = _normalize_title(raw_title)
-
-        # 1. Odrzuć openingi, endingi, AMV itp.
         sub_words = set(sub_norm.split())
         if sub_words & non_episode_markers:
-            log.debug(f"[Filter] Odrzucam (opening/ending): {raw_title}")
+            log.debug(f"[Filter] Odrzucam (marker): {raw_title}")
             return False
 
-        # 2. Sprawdź czy tytuł zaczyna się od szukanego tytułu
-        #    "naruto" pasuje do "naruto tv ep08"
-        #    "naruto" NIE pasuje do "boruto naruto next generations ep08"
-        #    "naruto" NIE pasuje do "naruto shippuuden tv ep08" (inna seria)
+    # Faza 2: sprawdź czy którykolwiek tytuł pasuje
+    for raw_title in sub_titles:
+        if not raw_title:
+            continue
+        sub_norm = _normalize_title(raw_title)
+
         if sub_norm.startswith(target_norm):
-            # Co jest ZA tytułem? Sprawdź czy to nie inna seria
             remainder = sub_norm[len(target_norm):].strip()
-            # Te słowa zaraz po tytule oznaczają inną serię
-            different_series = {"shippuuden", "shippuden", "shipuden", "sd", "boruto",
-                                "next generations", "rock lee"}
             if any(remainder.startswith(ds) for ds in different_series):
                 log.debug(f"[Filter] Odrzucam (inna seria): {raw_title}")
                 return False
             return True
 
-        # 3. Jeśli nie zaczyna się od tytułu, sprawdź czy target jest całym prefiksem
-        #    jakiegoś słowa (np. "one piece" w "one piece tv ep01")
         if target_norm in sub_norm:
-            # Upewnij się, że target nie jest tylko częścią dłuższego słowa
             idx = sub_norm.index(target_norm)
-            # Musi zaczynać się na początku lub po spacji
             if idx == 0 or sub_norm[idx - 1] == " ":
                 after = sub_norm[idx + len(target_norm):]
                 if not after or after[0] == " ":
-                    # Sprawdź czy przed tytułem nie ma słów które zmieniają serię
                     before = sub_norm[:idx].strip()
                     if before and before.split()[-1] in {"boruto", "sd"}:
                         return False
@@ -598,9 +590,6 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                             content = zf.read(sub_name)
                             subtitle_ext = "." + sub_name.rsplit(".", 1)[-1].lower() if "." in sub_name else ".srt"
                             log.info(f"[Download] Rozpakowano: {sub_name}")
-                            # TXT może być MicroDVD — sprawdź i skonwertuj
-                            if subtitle_ext == ".txt":
-                                subtitle_ext = ".srt"
                         else:
                             return PlainTextResponse("No subtitle in ZIP", status_code=404)
                 except zipfile.BadZipFile:
