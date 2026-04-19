@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -150,7 +150,7 @@ COMMON_HEADERS = {
 async def search_subtitles(title: str, title_type: str = "en") -> list[dict]:
     """
     Szuka napisów na animesub.info.
-    title_type: "en" (angielski) lub "org" (oryginalny)
+    Przeszukuje kilka stron wyników i różne sortowania.
     """
     cache_key = f"{title}:{title_type}"
     cached = search_cache.get(cache_key)
@@ -159,21 +159,46 @@ async def search_subtitles(title: str, title_type: str = "en") -> list[dict]:
         return cached["results"]
 
     log.info(f'[Szukanie] "{title}" (typ: {title_type})')
+    all_results = []
+    seen_ids = set()
 
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(
-                SEARCH_URL,
-                params={"szukane": title, "pTitle": title_type, "pSortuj": "pobrn"},
-                headers=COMMON_HEADERS,
-            )
-            # Strona jest w ISO-8859-2!
-            html = resp.content.decode("iso-8859-2", errors="replace")
-            results = _parse_search_results(html)
+            # Próbuj różne sortowania i strony
+            for sort in ["pobrn", "t_ang"]:
+                for page in range(3):  # max 3 strony
+                    params = {
+                        "szukane": title,
+                        "pTitle": title_type,
+                        "pSortuj": sort,
+                    }
+                    if page > 0:
+                        params["od"] = page
 
-            search_cache[cache_key] = {"results": results, "timestamp": time.time()}
-            log.info(f"[Znaleziono] {len(results)} napisów")
-            return results
+                    resp = await client.get(
+                        SEARCH_URL, params=params, headers=COMMON_HEADERS,
+                    )
+                    html = resp.content.decode("iso-8859-2", errors="replace")
+                    results = _parse_search_results(html)
+
+                    if not results:
+                        break  # brak wyników = koniec stron
+
+                    new_count = 0
+                    for r in results:
+                        if r["id"] not in seen_ids:
+                            seen_ids.add(r["id"])
+                            all_results.append(r)
+                            new_count += 1
+
+                    log.info(f"[Szukanie] sort={sort} page={page} → {len(results)} wyników ({new_count} nowych)")
+
+                    if new_count == 0:
+                        break  # same duplikaty = koniec
+
+            search_cache[cache_key] = {"results": all_results, "timestamp": time.time()}
+            log.info(f"[Znaleziono] {len(all_results)} napisów łącznie")
+            return all_results
 
     except Exception as e:
         log.error(f"[Szukanie] Błąd: {e}")
@@ -294,16 +319,21 @@ def generate_search_strategies(title: str, season: Optional[int], episode: Optio
     clean = re.sub(r"\s+", " ", title.replace("-", " ")).strip()
 
     if episode is not None:
-        ep = str(episode).zfill(2)
+        ep_padded = str(episode).zfill(2)
+        ep_raw = str(episode)
+
         if season and season > 1:
-            strategies.append({"type": "en", "query": f"{clean} Season {season} ep{ep}"})
-            strategies.append({"type": "en", "query": f"{clean} {season} ep{ep}"})
-            strategies.append({"type": "en", "query": f"{clean} S{season} ep{ep}"})
-        strategies.append({"type": "org", "query": f"{clean} ep{ep}"})
-        strategies.append({"type": "en", "query": f"{clean} ep{ep}"})
+            strategies.append({"type": "en", "query": f"{clean} Season {season} ep {ep_padded}"})
+            strategies.append({"type": "org", "query": f"{clean} {season} ep {ep_padded}"})
+
+        # Ze spacją i bez (animesub rozróżnia!)
+        strategies.append({"type": "org", "query": f"{clean} ep {ep_padded}"})
+        strategies.append({"type": "en", "query": f"{clean} ep {ep_padded}"})
+        strategies.append({"type": "org", "query": f"{clean} ep{ep_padded}"})
+        strategies.append({"type": "en", "query": f"{clean} ep{ep_padded}"})
+
         if season and season > 1:
             strategies.append({"type": "en", "query": f"{clean} Season {season}"})
-            strategies.append({"type": "en", "query": f"{clean} {season}"})
 
     strategies.append({"type": "org", "query": clean})
     strategies.append({"type": "en", "query": clean})
