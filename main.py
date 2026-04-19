@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -535,6 +535,30 @@ def convert_microdvd_to_srt(content: str, fps: float = 23.976) -> str:
         out.extend([str(i), f"{d['start']} --> {d['end']}", d["text"], ""])
     return "\n".join(out)
 
+def convert_tmplayer_to_srt(content: str) -> str:
+    """Konwertuje napisy TMPlayer (HH:MM:SS:tekst) do SRT."""
+    pattern = re.compile(r"(\d{1,2}):(\d{2}):(\d{2})[:\|](.+)")
+    dialogues = []
+
+    for line in content.split("\n"):
+        line = line.strip()
+        m = pattern.match(line)
+        if not m:
+            continue
+        h, mi, s, text = m.groups()
+        text = text.replace("|", "\n")
+        start = f"{int(h):02d}:{mi}:{s},000"
+        # TMPlayer nie ma czasu końcowego — dodajemy 3 sekundy
+        total = int(h) * 3600 + int(mi) * 60 + int(s) + 3
+        eh, em, es = total // 3600, (total % 3600) // 60, total % 60
+        end = f"{eh:02d}:{em:02d}:{es:02d},000"
+        dialogues.append({"start": start, "end": end, "text": text})
+
+    out = []
+    for i, d in enumerate(dialogues, 1):
+        out.extend([str(i), f"{d['start']} --> {d['end']}", d["text"], ""])
+    return "\n".join(out)
+
 # ══════════════════════════════════════════════════════════════
 #  POBIERANIE NAPISÓW (proxy endpoint)
 #
@@ -641,17 +665,25 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                 except UnicodeDecodeError:
                     text = content.decode("iso-8859-2", errors="replace")
 
-            # MicroDVD (.txt) → SRT
+            # TXT → SRT (auto-detekcja formatu: MicroDVD, TMPlayer)
             if subtitle_ext in (".txt", ".sub"):
-                log.info("[Download] Konwertuję MicroDVD → SRT...")
+                log.info("[Download] Wykrywam format TXT...")
                 try:
-                    srt = convert_microdvd_to_srt(text)
+                    srt = None
+                    if re.search(r"^\{\d+\}\{\d+\}", text, re.M):
+                        log.info("[Download] Format: MicroDVD")
+                        srt = convert_microdvd_to_srt(text)
+                    elif re.search(r"^\d{1,2}:\d{2}:\d{2}[:\|]", text, re.M):
+                        log.info("[Download] Format: TMPlayer")
+                        srt = convert_tmplayer_to_srt(text)
                     if srt and len(srt) > 10:
                         text = srt
                         subtitle_ext = ".srt"
-                        log.info("[Download] ✓ Konwersja MicroDVD OK")
+                        log.info("[Download] ✓ Konwersja OK")
+                    else:
+                        log.warning("[Download] Nierozpoznany format TXT")
                 except Exception as e:
-                    log.error(f"[Download] Błąd konwersji MicroDVD: {e}")
+                    log.error(f"[Download] Błąd konwersji: {e}")
 
             # ASS/SSA → SRT
             if subtitle_ext in (".ass", ".ssa"):
