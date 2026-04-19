@@ -8,6 +8,7 @@ set -e
 
 VENV_DIR="${HOME}/venv"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PARENT_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 SERVICE_NAME="animesub"
 
 echo "══════════════════════════════════════════════════"
@@ -17,7 +18,7 @@ echo "════════════════════════�
 # Zainstaluj nowe zależności jeśli requirements.txt się zmienił
 echo "[1/3] Sprawdzam zależności..."
 source "$VENV_DIR/bin/activate"
-pip install -q -r "$PROJECT_DIR/requirements.txt"
+pip install -q -r "$PARENT_DIR/requirements.txt"
 deactivate
 
 # Restart usługi
@@ -32,9 +33,11 @@ sleep 2
 if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
     echo ""
     echo "  ✓ $SERVICE_NAME działa"
+    echo "  Logi: sudo journalctl status $SERVICE_NAME --no-pager -n 0"
     echo "  Logi: sudo journalctl -u $SERVICE_NAME -f"
+    echo "  Logi: sudo journalctl -u $SERVICE_NAME --no-pager -n 20"
 else
     echo ""
     echo "  ✗ Usługa nie działa! Sprawdź logi:"
-    sudo journalctl -u "$SERVICE_NAME" --no-pager -n 20
+    sudo journalctl -u $SERVICE_NAME --no-pager
 fi

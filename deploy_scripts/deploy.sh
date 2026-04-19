@@ -12,6 +12,7 @@ set -e
 DOMAIN="animesub-stremio-addon.duckdns.org"   # twoja subdomena DuckDNS
 PORT=8080                                      # port addonu
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"   # katalog w którym leży ten skrypt
+PARENT_DIR="$(cd "$PROJECT_DIR/.." && pwd)"    # katalog główny projektu (tam gdzie main.py)
 VENV_DIR="${HOME}/venv"                   # ścieżka do virtualenv
 SERVICE_NAME="animesub"                        # nazwa usługi systemd
 
@@ -23,7 +24,7 @@ echo "════════════════════════�
 echo ""
 echo "  Domena:   $DOMAIN"
 echo "  Port:     $PORT"
-echo "  Projekt:  $PROJECT_DIR"
+echo "  Projekt:  $PARENT_DIR"
 echo ""
 
 # ── 1. Aktualizacja systemu ───────────────────────────────────
@@ -37,7 +38,7 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 source "$VENV_DIR/bin/activate"
-pip install -r "$PROJECT_DIR/requirements.txt"
+pip install -r "$PARENT_DIR/requirements.txt"
 deactivate
 
 # ── 3. Firewall (iptables) ────────────────────────────────────
@@ -83,7 +84,7 @@ After=network.target
 [Service]
 Type=simple
 User="${USER}"
-WorkingDirectory=${PROJECT_DIR}
+WorkingDirectory=${PARENT_DIR}
 Environment=BASE_URL=https://${DOMAIN}
 ExecStart=${VENV_DIR}/bin/uvicorn main:app --host 0.0.0.0 --port ${PORT}
 Restart=always

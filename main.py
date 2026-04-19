@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -327,7 +327,7 @@ def _title_matches(sub_titles: list[str], target_title: str) -> bool:
     target_words = set(target_norm.split())
 
     # Słowa kluczowe które oznaczają INNĄ serię lub nie-odcinek
-    non_episode_markers = {"opening", "ending", "op", "ed", "ost", "soundtrack", "amv", "trailer", "pv"}
+    non_episode_markers = {"opening", "ending", "op", "ed", "ost", "soundtrack", "amv", "trailer", "pv", "movie", "film", "ova", "special"}
 
     for raw_title in sub_titles:
         if not raw_title:
@@ -467,6 +467,49 @@ def convert_ass_to_srt(ass_content: str) -> str:
         out.extend([str(i), f"{d['start']} --> {d['end']}", d["text"], ""])
     return "\n".join(out)
 
+def convert_microdvd_to_srt(content: str, fps: float = 23.976) -> str:
+    """Konwertuje napisy MicroDVD ({start}{stop}tekst) do SRT."""
+    pattern = re.compile(r"\{(\d+)\}\{(\d+)\}(.+)")
+    dialogues = []
+
+    for line in content.split("\n"):
+        line = line.strip()
+        m = pattern.match(line)
+        if not m:
+            continue
+        start_frame, end_frame, text = int(m.group(1)), int(m.group(2)), m.group(3)
+
+        # Pierwsza linia może zawierać info o FPS: {1}{1}23.976
+        if start_frame <= 1 and end_frame <= 1:
+            try:
+                detected_fps = float(text.replace(",", "."))
+                if 10 < detected_fps < 60:
+                    fps = detected_fps
+                    log.info(f"[MicroDVD] Wykryto FPS: {fps}")
+            except ValueError:
+                pass
+            continue
+
+        text = text.replace("|", "\n")
+
+        def frames_to_time(frames: int) -> str:
+            total_seconds = frames / fps
+            h = int(total_seconds // 3600)
+            m = int((total_seconds % 3600) // 60)
+            s = int(total_seconds % 60)
+            ms = int((total_seconds % 1) * 1000)
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+        dialogues.append({
+            "start": frames_to_time(start_frame),
+            "end": frames_to_time(end_frame),
+            "text": text,
+        })
+
+    out = []
+    for i, d in enumerate(dialogues, 1):
+        out.extend([str(i), f"{d['start']} --> {d['end']}", d["text"], ""])
+    return "\n".join(out)
 
 # ══════════════════════════════════════════════════════════════
 #  POBIERANIE NAPISÓW (proxy endpoint)
@@ -555,6 +598,9 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                             content = zf.read(sub_name)
                             subtitle_ext = "." + sub_name.rsplit(".", 1)[-1].lower() if "." in sub_name else ".srt"
                             log.info(f"[Download] Rozpakowano: {sub_name}")
+                            # TXT może być MicroDVD — sprawdź i skonwertuj
+                            if subtitle_ext == ".txt":
+                                subtitle_ext = ".srt"
                         else:
                             return PlainTextResponse("No subtitle in ZIP", status_code=404)
                 except zipfile.BadZipFile:
@@ -571,6 +617,18 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                     text = content.decode("windows-1250")
                 except UnicodeDecodeError:
                     text = content.decode("iso-8859-2", errors="replace")
+
+            # MicroDVD (.txt) → SRT
+            if subtitle_ext in (".txt", ".sub"):
+                log.info("[Download] Konwertuję MicroDVD → SRT...")
+                try:
+                    srt = convert_microdvd_to_srt(text)
+                    if srt and len(srt) > 10:
+                        text = srt
+                        subtitle_ext = ".srt"
+                        log.info("[Download] ✓ Konwersja MicroDVD OK")
+                except Exception as e:
+                    log.error(f"[Download] Błąd konwersji MicroDVD: {e}")
 
             # ASS/SSA → SRT
             if subtitle_ext in (".ass", ".ssa"):
