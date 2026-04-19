@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -188,6 +188,8 @@ async def search_subtitles(title: str, title_type: str = "en") -> list[dict]:
                     for r in results:
                         if r["id"] not in seen_ids:
                             seen_ids.add(r["id"])
+                            r["sort"] = sort
+                            r["page"] = page
                             all_results.append(r)
                             new_count += 1
 
@@ -543,7 +545,7 @@ def convert_microdvd_to_srt(content: str, fps: float = 23.976) -> str:
 # ══════════════════════════════════════════════════════════════
 
 @app.get("/subtitles/download")
-async def download_subtitle(id: str, hash: str, query: str = "test", type: str = "org"):
+async def download_subtitle(id: str, hash: str, query: str = "test", type: str = "org", sort: str = "pobrn", page: int = 0):
     """Proxy do pobierania napisów z animesub.info."""
     log.info(f"[Download] id={id}, query={query}")
 
@@ -553,7 +555,9 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
         ) as client:
 
             # Krok 1: Wyszukiwanie → ciasteczka + świeży hash
-            search_params = {"szukane": query, "pTitle": type, "pSortuj": "pobrn"}
+            search_params = {"szukane": query, "pTitle": type, "pSortuj": sort}
+            if page > 0:
+                search_params["od"] = page
             search_full_url = f"{SEARCH_URL}?{urlencode(search_params)}"
 
             log.info("[Download] Krok 1: Pobieram stronę wyszukiwania (ciasteczka)")
@@ -735,6 +739,8 @@ async def subtitles_handler(content_type: str, content_id: str):
             params = urlencode({
                 "id": sub["id"], "hash": sub["hash"],
                 "query": sub["sq"], "type": sub["st"],
+                "sort": sub.get("sort", "pobrn"),
+                "page": sub.get("page", 0),
             })
 
             stremio_subs.append({
