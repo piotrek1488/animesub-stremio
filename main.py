@@ -16,7 +16,7 @@ import httpx
 from bs4 import BeautifulSoup
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, PlainTextResponse
+from fastapi.responses import JSONResponse, Response, PlainTextResponse, FileResponse
 
 # ── Konfiguracja ──────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -541,13 +541,19 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                 log.info("[Download] Rozpakowuję ZIP...")
                 try:
                     with zipfile.ZipFile(io.BytesIO(content)) as zf:
+                        all_files = zf.namelist()
+                        log.info(f"[Download] Pliki w ZIP: {all_files}")
                         sub_name = next(
-                            (n for n in zf.namelist() if re.search(r"\.(srt|ass|ssa|sub)$", n, re.I)),
+                            (n for n in all_files if re.search(r"\.(srt|ass|ssa|sub|txt)$", n, re.I)),
                             None
                         )
+                        if not sub_name and all_files:
+                            # Jeśli brak rozpoznanego rozszerzenia, weź pierwszy plik
+                            sub_name = all_files[0]
+                            log.info(f"[Download] Brak rozpoznanego rozszerzenia, biorę: {sub_name}")
                         if sub_name:
                             content = zf.read(sub_name)
-                            subtitle_ext = "." + sub_name.rsplit(".", 1)[-1].lower()
+                            subtitle_ext = "." + sub_name.rsplit(".", 1)[-1].lower() if "." in sub_name else ".srt"
                             log.info(f"[Download] Rozpakowano: {sub_name}")
                         else:
                             return PlainTextResponse("No subtitle in ZIP", status_code=404)
@@ -596,7 +602,7 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
 #  GŁÓWNY ENDPOINT NAPISÓW DLA STREMIO
 # ══════════════════════════════════════════════════════════════
 
-@app.get("/subtitles/{content_type}/{content_id}/{extra}.json")
+@app.get("/subtitles/{content_type}/{content_id}/{extra:path}")
 async def subtitles_handler_extra(content_type: str, content_id: str, extra: str = ""):
     return await subtitles_handler(content_type, content_id)
 
