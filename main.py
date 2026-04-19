@@ -45,11 +45,11 @@ app.add_middleware(
 )
 
 MANIFEST = {
-    "id": "community.animesub.info",
-    "version": "1.0.0",
+    "id": "org.stremio.addon.info.animesub",
+    "version": "1.0.1",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
-    "logo": "https://i.imgur.com/qKLYVZx.png",
+    "logo": "./ASlogo.jpg",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "kitsu"],
