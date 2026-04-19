@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: animesub-stremio-addon
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: BASE_URL
+        sync: false
