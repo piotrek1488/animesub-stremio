@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Animesub.info Stremio Addon</title>
+
+  <!-- Ikony -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      /* background: url('background.jpg') no-repeat center center/cover; */
+      background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+      color: #eee;
+    }
+
+    /* === BANNER === */
+    .banner {
+      width: 100%;
+      background: rgba(45, 45, 45, 0.82);
+      backdrop-filter: blur(10px);
+
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .title {
+      font-size: 80px;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+
+    .description {
+      max-width: 600px;
+      margin: 0 auto 30px;
+      font-size: 18px;
+      color: #ccc;
+    }
+
+    /* === BUTTONS === */
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 15px 31px;
+      border-radius: 33px;
+      font-size: 15px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: 0.2s;
+      margin-top: 20px;
+      margin-bottom: 20px;
+      font-family: Arial, sans-serif;
+    }
+
+    .btn-green {
+      background: #00a862;
+      color: #ffffff;
+    }
+
+    .btn-green:hover {
+      cursor: pointer;
+    }
+
+    /* === FOOTER === */
+    footer {
+      margin-top: auto;
+      text-align: center;
+      padding: 20px;
+      font-size: 14px;
+      color: #888;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .github {
+      font-size: 20px;
+      color: #aaa;
+      transition: 0.2s;
+    }
+
+    .github:hover {
+      color: #fff;
+    }
+
+    a {
+      color: #00a862;
+      text-decoration: none;
+      transition: 0.2s;
+    }
+
+    a:hover {
+      /* color: rgba(110,110,110,0.8); */
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .title {
+        font-size: 42px;
+      }
+
+      .description {
+        font-size: 16px;
+      }
+    }
+
+    .file-path {
+      margin-top: 20px;
+      padding: 12px 16px;
+      width: 100%;
+      max-width: 800px;
+      background-color: rgba(100, 100, 100, 0.82);
+      border: 1px solid #555;
+      border-radius: 6px;
+      font-family: monospace;
+      color: #ccc;
+      word-break: break-all;
+      user-select: all;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      max-width: 600px;
+      font-size: 18px;
+    }
+
+    .file-input {
+      width: 100%;
+      max-width: 800px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 14px;
+      border: inset;
+      border-width: 3px 3px;
+      border-color: rgba(0, 0, 0, 0.8);
+      background: none;
+      color: #fff;
+      outline: none;
+      user-select: all;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="banner">
+    <div class="title">
+      AnimeSub.info<br />Stremio Addon
+    </div>
+
+    <div class="description">
+      Automatyczne wczytywanie polskich napisów<br>do anime z&nbsp;<a href="http://animesub.info">AnimeSub.info</a>
+      w&nbsp;<a href="https://web.strem.io">Stremio</a>.
+    </div>
+    <div class="buttons">
+
+      <a href="{stremio_url}" class="btn btn-green">
+        <i class="fa-solid fa-download"></i>
+        Instaluj (App)
+      </a>
+
+      <a href="https://web.strem.io/#/addons?addon={public_url}/manifest.json" class="btn btn-green">
+        <i class="fa-solid fa-download"></i>
+        Instaluj (Web)
+      </a>
+
+    </div>
+    <div class="file-path" style="text-align:center;">
+      <p style="font-size: 14px; color: #888;">Link do manifestu:</p>
+      <input class="file-input" readonly value="{public_url}/manifest.json" />
+    </div>
+    <br>
+    <div style="margin-top:20px;">
+      <a href="https://buycoffee.to/ludvickpro" target="_blank"><img
+          src="https://buycoffee.to/static/img/share/share-button-primary.png" style="width: 175px; height: 46px"
+          alt="Postaw mi kawę na buycoffee.to"></a>
+    </div>
+  </div>
+
+  <footer>
+    © {current_year} AnimeSub.info Stremio Addon v{version_placeholder}
+    <a href="https://github.com/piotrek1488/animesub-stremio/tree/python" target="_blank" class="github">
+      <i class="fab fa-github"></i>
+    </a>
+  </footer>
+
+</body>
+
+</html>

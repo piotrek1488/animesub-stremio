@@ -14,9 +14,15 @@ from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, PlainTextResponse, FileResponse
+from fastapi.responses import JSONResponse, Response, PlainTextResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from datetime import datetime
+
+
+with open("version", "r") as f:
+    app_version = f.read().strip()
 
 # ── Konfiguracja ──────────────────────────────────────────────
 
@@ -27,6 +33,7 @@ DOWNLOAD_URL = f"{ANIMESUB_BASE}/sciagnij.php"
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("animesub")
+year = str(datetime.now().year)
 
 # ── Cache ─────────────────────────────────────────────────────
 
@@ -46,26 +53,51 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.9",
+    "version": app_version,
     "name": "AnimeSub.info Subtitles",
-    "description": "Polskie napisy do anime z animesub.info",
-    "logo": f"{BASE_URL}/ASlogo.jpg",
+    "description": "Dodatek wyszukuje polskie napisy do anime z animesub.info",
+    "logo": f"{BASE_URL}/static/icon.jpg",
     "resources": ["subtitles"],
     "types": ["movie", "series"],
     "idPrefixes": ["tt", "kitsu"],
+    "contactEmail": "piotrek1488@gmail.com",
     "catalogs": [],
     "behaviorHints": {"configurable": False, "configurationRequired": False},
 }
 
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/version")
+async def version():
+    try:
+        with open("version") as f: return PlainTextResponse(f.read().strip())
+    except: return PlainTextResponse("?", status_code=404)
+
+async def index(request: Request):
+    host = request.headers.get("host", "127.0.0.1:7000")
+    protocol = "https" if "onrender.com" in host else "http"
+    full_url = f"{protocol}://{host}"
+    try:
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            content = f.read()
+        content = content.replace("{public_url}", full_url)
+        content = content.replace("{stremio_url}", f"stremio://{host}/manifest.json")
+        content = content.replace("{version_placeholder}", app_version)
+        content = content.replace("{current_year}", year)
+        return HTMLResponse(content=content)
+    except FileNotFoundError:
+        return HTMLResponse("<h1>static/index.html not found</h1>", status_code=404)
+app.add_api_route("/", index, methods=["GET", "HEAD"])
 
 @app.get("/manifest.json")
 @app.get("/")
 async def manifest():
     return JSONResponse(content=MANIFEST)
 
-@app.get("/ASlogo.jpg")
+@app.get("/static/icon.jpg")
 async def logo():
-    return FileResponse("ASlogo.jpg", media_type="image/jpeg")
+    return FileResponse("icon.jpg", media_type="image/jpeg")
 
 # ══════════════════════════════════════════════════════════════
 #  METADATA: IMDB/Kitsu → tytuł anime
