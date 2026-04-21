@@ -31,7 +31,7 @@ log = logging.getLogger("animesub")
 # ── Cache ─────────────────────────────────────────────────────
 
 search_cache: dict[str, dict] = {}
-CACHE_TTL = 30 * 60  # 30 minut
+CACHE_TTL = 60 * 30  # 30 minut
 
 # ── FastAPI ───────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ app.add_middleware(
 
 MANIFEST = {
     "id": "org.stremio.addon.info.animesub",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "name": "AnimeSub.info Subtitles",
     "description": "Polskie napisy do anime z animesub.info",
     "logo": f"{BASE_URL}/ASlogo.jpg",
@@ -439,6 +439,54 @@ def _strip_ass_tags(text: str) -> str:
     result = re.sub(r"\{[^}]*\}", "", text)
     return result.replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ").strip()
 
+def _deoverlap_srt(srt_text: str) -> str:
+    """Usuwa nakładanie się napisów — przycina end time do start time następnej linii."""
+    blocks = srt_text.strip().split("\n\n")
+    parsed = []
+
+    time_pattern = re.compile(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})")
+
+    for block in blocks:
+        lines = block.strip().split("\n")
+        if len(lines) < 3:
+            continue
+        m = time_pattern.search(lines[1])
+        if not m:
+            continue
+        parsed.append({
+            "num": lines[0],
+            "start": m.group(1),
+            "end": m.group(2),
+            "text": "\n".join(lines[2:]),
+        })
+
+    # Przytnij end time jeśli nachodzi na start następnej linii
+    for i in range(len(parsed) - 1):
+        if parsed[i]["end"] > parsed[i + 1]["start"]:
+            # Przytnij do 50ms przed startem następnej, zachowaj minimum 500ms
+            def parse_t(s: str) -> float:
+                h, m, rest = s.split(":")
+                sec, ms = rest.split(",")
+                return int(h) * 3600 + int(m) * 60 + int(sec) + int(ms) / 1000
+
+            def fmt_t(t: float) -> str:
+                h_ = int(t // 3600)
+                m_ = int((t % 3600) // 60)
+                s_ = int(t % 60)
+                ms_ = int((t % 1) * 1000)
+                return f"{h_:02d}:{m_:02d}:{s_:02d},{ms_:03d}"
+
+            start_t = parse_t(parsed[i]["start"])
+            next_t = parse_t(parsed[i + 1]["start"])
+            new_end = next_t - 0.05  # 50ms buffer
+            if new_end - start_t < 0.5:
+                new_end = start_t + 0.5  # minimum 500ms wyświetlania
+            parsed[i]["end"] = fmt_t(new_end)
+
+    out = []
+    for i, d in enumerate(parsed, 1):
+        out.extend([str(i), f"{d['start']} --> {d['end']}", d["text"], ""])
+    return "\n".join(out)
 
 def convert_ass_to_srt(ass_content: str) -> str:
     """Konwertuje ASS/SSA → SRT."""
@@ -538,7 +586,7 @@ def convert_microdvd_to_srt(content: str, fps: float = 23.976) -> str:
 def convert_tmplayer_to_srt(content: str) -> str:
     """Konwertuje napisy TMPlayer (HH:MM:SS:tekst) do SRT."""
     pattern = re.compile(r"(\d{1,2}):(\d{2}):(\d{2})[:\|](.+)")
-    dialogues = []
+    entries = []
 
     for line in content.split("\n"):
         line = line.strip()
@@ -547,12 +595,39 @@ def convert_tmplayer_to_srt(content: str) -> str:
             continue
         h, mi, s, text = m.groups()
         text = text.replace("|", "\n")
-        start = f"{int(h):02d}:{mi}:{s},000"
-        # TMPlayer nie ma czasu końcowego — dodajemy 3 sekundy
-        total = int(h) * 3600 + int(mi) * 60 + int(s) + 3
-        eh, em, es = total // 3600, (total % 3600) // 60, total % 60
-        end = f"{eh:02d}:{em:02d}:{es:02d},000"
-        dialogues.append({"start": start, "end": end, "text": text})
+        start_sec = int(h) * 3600 + int(mi) * 60 + int(s)
+        entries.append({"start_sec": start_sec, "text": text})
+
+    # Wylicz end na podstawie następnej linijki + długości tekstu
+    dialogues = []
+    for i, e in enumerate(entries):
+        # Bazowy czas trwania — zależny od długości tekstu (ok. 15 znaków/sekunda + 1s zapasu)
+        text_len = len(e["text"].replace("\n", " "))
+        natural_duration = max(1.5, min(7.0, text_len / 15 + 1))
+
+        if i + 1 < len(entries):
+            # Zostaw małą przerwę przed następną (0.1s)
+            max_duration = entries[i + 1]["start_sec"] - e["start_sec"] - 0.1
+            duration = min(natural_duration, max_duration) if max_duration > 0.5 else max_duration
+            if duration < 0.5:
+                duration = 0.5  # minimum
+        else:
+            duration = natural_duration
+
+        end_sec = e["start_sec"] + duration
+
+        def fmt(t: float) -> str:
+            h_ = int(t // 3600)
+            m_ = int((t % 3600) // 60)
+            s_ = int(t % 60)
+            ms_ = int((t % 1) * 1000)
+            return f"{h_:02d}:{m_:02d}:{s_:02d},{ms_:03d}"
+
+        dialogues.append({
+            "start": fmt(e["start_sec"]),
+            "end": fmt(end_sec),
+            "text": e["text"],
+        })
 
     out = []
     for i, d in enumerate(dialogues, 1):
@@ -695,7 +770,8 @@ async def download_subtitle(id: str, hash: str, query: str = "test", type: str =
                         log.info("[Download] ✓ Konwersja OK")
                 except Exception as e:
                     log.error(f"[Download] Błąd konwersji: {e}")
-
+            if "-->" in text:
+                text = _deoverlap_srt(text)
             log.info(f"[Download] ✓ Wysyłam ({len(text)} znaków)")
             return Response(
                 content=text.encode("utf-8"),
