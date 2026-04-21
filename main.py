@@ -75,8 +75,8 @@ async def version():
     except: return PlainTextResponse("?", status_code=404)
 
 async def index(request: Request):
-    host = request.headers.get("host", "127.0.0.1:7000")
-    protocol = "https" if "onrender.com" in host else "http"
+    host = request.headers.get("host", "127.0.0.1:8080")
+    protocol = "https" if "duckdns.org" in host else "http"
     full_url = f"{protocol}://{host}"
     try:
         with open("static/index.html", "r", encoding="utf-8") as f:
