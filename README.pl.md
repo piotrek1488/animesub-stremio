@@ -1,3 +1,7 @@
+## 🌍 Język
+- 🇬🇧 [English](README.md)
+- 🇵🇱 Polski
+
 # AnimeSub.info – Stremio Addon
 
 Addon do Stremio pobierający polskie napisy do anime z [animesub.info](http://animesub.info).
@@ -21,7 +25,8 @@ Przepisany na Python z [addonu JS](https://huggingface.co/spaces/anemicpathbling
 ├── deploy.sh          # Skrypt pierwszego deployu na Oracle Cloud
 ├── restart.sh         # Restart po aktualizacji kodu
 ├── render.yaml        # Konfiguracja dla Render (alternatywa)
-└── README.md
+├── README.md
+└── README.pl.md
 ```
 
 ## Szybki start (lokalnie)
@@ -132,3 +137,10 @@ sudo systemctl status caddy         # status Caddy (HTTPS)
 **Stremio URL format** — Stremio dodaje do URL nazwę pliku (`/subtitles/series/tt123:1:1/filename=....json`). Addon obsługuje oba formaty.
 
 **Cache** — wyniki wyszukiwania trzymane w pamięci przez 30 minut.
+
+## Informacja o AI
+
+Ten addon powstał przy wsparciu narzędzi AI.
+
+AI było wykorzystywane do generowania kodu, refaktoryzacji oraz implementacji części funkcjonalności.  
+Ostateczna logika, struktura oraz testy zostały zweryfikowane i poprawione ręcznie.
