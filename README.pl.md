@@ -40,6 +40,18 @@ python3 main.py
 
 Addon wystartuje na `http://localhost:8080/manifest.json`.
 
+## Szybki start (docker)
+Możesz uruchomić ten projekt jako kontener Docker, korzystając z gotowego obrazu. Jest to najszybszy sposób na wdrożenie addonu bez konieczności konfigurowania lokalnego środowiska Pythona.
+
+Uruchomienie kontenera:
+```bash
+docker run -d \
+  --name animesub-stremio-addon \
+  -p 8080:8080 \
+  -e BASE_URL=http://localhost:8080 \
+  docker.io/ludvickpro/animesub-stremio-addon:latest
+```
+
 ## Deploy na Oracle Cloud (zalecany, darmowy 24/7)
 
 ### Wymagania

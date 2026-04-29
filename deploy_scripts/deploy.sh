@@ -83,7 +83,7 @@ After=network.target
 
 [Service]
 Type=simple
-User="${USER}"
+#User="${USER}"
 WorkingDirectory=${PARENT_DIR}
 Environment=BASE_URL=https://${DOMAIN}
 ExecStart=${VENV_DIR}/bin/uvicorn main:app --host 0.0.0.0 --port ${PORT}
