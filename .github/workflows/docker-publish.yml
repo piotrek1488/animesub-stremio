@@ -34,5 +34,5 @@ jobs:
           context: .
           push: true
           tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/animesub-stremio-addon:${{ steps.get_version.outputs.VERSION }}
-          ${{ secrets.DOCKERHUB_USERNAME }}/animesub-stremio-addon:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/animesub-stremio-addon:${{ steps.get_version.outputs.VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/animesub-stremio-addon:latest
