@@ -11,7 +11,7 @@ jobs:
 
     environment:
       name: docker.io
-      url: https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/animesub-stremio-addon
+      url: https://hub.docker.com/r/ludvickpro/animesub-stremio-addon
 
     steps:
       - name: Checkout code
